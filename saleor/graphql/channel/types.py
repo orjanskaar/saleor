@@ -77,9 +77,19 @@ class ChannelContextTypeWithMetadataForObjectType(ChannelContextTypeForObjectTyp
         return ObjectWithMetadata.resolve_metadata(root.node, info)
 
     @staticmethod
+    def resolve_meta(root: ChannelContext, info):
+        # Used in metadata API to resolve metadata fields from an instance.
+        return ObjectWithMetadata.resolve_meta(root.node, info)
+
+    @staticmethod
     def resolve_private_metadata(root: ChannelContext, info):
         # Used in metadata API to resolve private metadata fields from an instance.
         return ObjectWithMetadata.resolve_private_metadata(root.node, info)
+
+    @staticmethod
+    def resolve_private_meta(root: ChannelContext, info):
+        # Used in metadata API to resolve private metadata fields from an instance.
+        return ObjectWithMetadata.resolve_private_meta(root.node, info)
 
 
 class ChannelContextTypeWithMetadata(

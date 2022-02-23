@@ -208,7 +208,9 @@ type Allocation implements Node {
 type App implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   permissions: [Permission]
   created: DateTime
   isActive: Boolean
@@ -465,7 +467,9 @@ type AssignedVariantAttribute {
 type Attribute implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   inputType: AttributeInputTypeEnum
   entityType: AttributeEntityTypeEnum
   name: String
@@ -820,7 +824,9 @@ input CatalogueInput {
 type Category implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   seoTitle: String
   seoDescription: String
   name: String!
@@ -1009,7 +1015,9 @@ input ChannelUpdateInput {
 type Checkout implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   created: DateTime!
   lastChange: DateTime!
   user: User
@@ -1254,7 +1262,9 @@ type ChoiceValue {
 type Collection implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   seoTitle: String
   seoDescription: String
   name: String!
@@ -1863,7 +1873,9 @@ union DeliveryMethod = Warehouse | ShippingMethod
 type DigitalContent implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   useDefaultSettings: Boolean!
   automaticFulfillment: Boolean!
   contentFile: String!
@@ -2319,7 +2331,9 @@ type FileUpload {
 type Fulfillment implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   fulfillmentOrder: Int!
   status: FulfillmentStatus!
   trackingNumber: String!
@@ -2401,7 +2415,9 @@ scalar GenericScalar
 type GiftCard implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   displayCode: String!
   last4CodeChars: String!
   code: String!
@@ -2707,7 +2723,9 @@ input IntRangeInput {
 
 type Invoice implements ObjectWithMetadata & Job & Node {
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   status: JobStatusEnum!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -3650,7 +3668,9 @@ enum MeasurementUnitsEnum {
 type Menu implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   slug: String!
   items: [MenuItem]
@@ -3723,7 +3743,9 @@ input MenuInput {
 type MenuItem implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   menu: Menu!
   parent: MenuItem
@@ -3849,6 +3871,8 @@ type MenuUpdate {
   errors: [MenuError!]!
   menu: Menu
 }
+
+scalar Metadata
 
 type MetadataError {
   field: String
@@ -4189,13 +4213,17 @@ interface Node {
 
 interface ObjectWithMetadata {
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
 }
 
 type Order implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   created: DateTime!
   status: OrderStatus!
   user: User
@@ -4765,7 +4793,9 @@ type OrderVoid {
 type Page implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   seoTitle: String
   seoDescription: String
   title: String!
@@ -4937,7 +4967,9 @@ input PageTranslationInput {
 type PageType implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   slug: String!
   attributes: [Attribute]
@@ -5028,7 +5060,9 @@ type PasswordChange {
 type Payment implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   gateway: String!
   isActive: Boolean!
   created: DateTime!
@@ -5372,7 +5406,9 @@ input PriceRangeInput {
 type Product implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   seoTitle: String
   seoDescription: String
   name: String!
@@ -5742,7 +5778,9 @@ type ProductTranslation implements Node {
 type ProductType implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   slug: String!
   hasVariants: Boolean!
@@ -5856,7 +5894,9 @@ type ProductUpdate {
 type ProductVariant implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   sku: String
   product: Product!
@@ -6165,7 +6205,9 @@ type RequestPasswordReset {
 type Sale implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   type: SaleType!
   startDate: DateTime!
@@ -6349,7 +6391,9 @@ enum ShippingErrorCode {
 type ShippingMethod implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   type: ShippingMethodTypeEnum @deprecated(reason: "This field will be removed in Saleor 4.0.")
   name: String!
   description: JSONString
@@ -6416,7 +6460,9 @@ type ShippingMethodTranslation implements Node {
 type ShippingMethodType implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   description: JSONString
   type: ShippingMethodTypeEnum
@@ -6513,7 +6559,9 @@ type ShippingPriceUpdate {
 type ShippingZone implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   default: Boolean!
   priceRange: MoneyRange
@@ -6997,7 +7045,9 @@ enum UploadErrorCode {
 type User implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   email: String!
   firstName: String!
   lastName: String!
@@ -7144,7 +7194,9 @@ enum VolumeUnitsEnum {
 type Voucher implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String
   code: String!
   usageLimit: Int
@@ -7319,7 +7371,9 @@ type VoucherUpdate {
 type Warehouse implements Node & ObjectWithMetadata {
   id: ID!
   privateMetadata: [MetadataItem]!
+  privateMeta: Metadata
   metadata: [MetadataItem]!
+  meta: Metadata
   name: String!
   slug: String!
   email: String!
