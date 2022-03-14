@@ -17,10 +17,15 @@ from ..base_plugin import BasePlugin, ConfigurationTypeField, ExternalAccessToke
 
 if TYPE_CHECKING:
     # flake8: noqa
+    from datetime import datetime
+
+    from django.http import HttpRequest, JsonResponse
+
     from ...account.models import Address
     from ...channel.models import Channel
     from ...checkout.fetch import CheckoutInfo, CheckoutLineInfo
     from ...checkout.models import Checkout
+    from ...core.models import EventDeliveryAttempt
     from ...discount import DiscountInfo
     from ...discount.models import Sale
     from ...graphql.discount.mutations import NodeCatalogueInfo
@@ -262,6 +267,19 @@ class PluginSample(BasePlugin):
         return NotImplemented
 
     def event_delivery_retry(self, delivery: "EventDelivery", previous_value: Any):
+        return True
+
+    def observability_api_call(
+        self, request: "HttpRequest", response: "JsonResponse", previous_value: Any
+    ):
+        return True
+
+    def observability_event_delivery_attempt(
+        self,
+        attempt: "EventDeliveryAttempt",
+        next_retry: Optional["datetime"],
+        previous_value: Any,
+    ):
         return True
 
     def perform_mutation(

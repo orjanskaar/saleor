@@ -26,11 +26,16 @@ from .models import PluginConfiguration
 
 if TYPE_CHECKING:
     # flake8: noqa
+    from datetime import datetime
+
+    from django.http import HttpRequest, JsonResponse
+
     from ..account.models import Address, User
     from ..channel.models import Channel
     from ..checkout.fetch import CheckoutInfo, CheckoutLineInfo
     from ..checkout.models import Checkout
     from ..core.middleware import Requestor
+    from ..core.models import EventDeliveryAttempt
     from ..core.notify_events import NotifyEventType
     from ..core.taxes import TaxType
     from ..discount import DiscountInfo
@@ -508,6 +513,18 @@ class BasePlugin:
     product_variant_updated: Callable[["ProductVariant", Any], Any]
 
     refund_payment: Callable[["PaymentData", Any], GatewayResponse]
+
+    #  Trigger when api call is made.
+    #
+    #  Overwrite this method if you need log api call.
+    observability_api_call: Callable[["HttpRequest", "JsonResponse", Any], Any]
+
+    #  Trigger when event delivery attempt is made
+    #
+    #  Overwrite this method if you need log webhook delivery attempt.
+    observability_event_delivery_attempt: Callable[
+        ["EventDeliveryAttempt", Optional["datetime"], Any], Any
+    ]
 
     #  Trigger when sale is created.
     #

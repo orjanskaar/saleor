@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from django.http import HttpResponseNotFound, JsonResponse
+from django.utils import timezone
 from django_countries.fields import Country
 from prices import Money, TaxedMoney
 
@@ -1066,6 +1067,20 @@ def test_manager_delivery_retry(event_delivery):
     manager = PluginsManager(plugins=plugins)
     delivery_retry = manager.event_delivery_retry(event_delivery=event_delivery)
     assert delivery_retry
+
+
+def test_manager_report_api_call(rf):
+    plugins = ["saleor.plugins.tests.sample_plugins.PluginSample"]
+    manager = PluginsManager(plugins=plugins)
+    assert manager.observability_api_call(
+        rf.post("/"), JsonResponse({"response": "data"})
+    )
+
+
+def test_manager_report_event_delivery_attempt(event_attempt):
+    plugins = ["saleor.plugins.tests.sample_plugins.PluginSample"]
+    manager = PluginsManager(plugins=plugins)
+    assert manager.observability_event_delivery_attempt(event_attempt, timezone.now())
 
 
 @mock.patch(

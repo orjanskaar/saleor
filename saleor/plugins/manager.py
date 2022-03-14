@@ -38,10 +38,15 @@ from .models import PluginConfiguration
 
 if TYPE_CHECKING:
     # flake8: noqa
+    from datetime import datetime
+
+    from django.http import HttpRequest, JsonResponse
+
     from ..account.models import Address, User
     from ..checkout.fetch import CheckoutInfo, CheckoutLineInfo
     from ..checkout.models import Checkout
     from ..core.middleware import Requestor
+    from ..core.models import EventDeliveryAttempt
     from ..discount.models import Sale
     from ..invoice.models import Invoice
     from ..order.models import Fulfillment, Order, OrderLine
@@ -645,6 +650,20 @@ class PluginsManager(PaymentInterface):
         default_value = None
         return self.__run_method_on_plugins(
             "draft_order_deleted", default_value, order, channel_slug=order.channel.slug
+        )
+
+    def observability_api_call(self, request: "HttpRequest", response: "JsonResponse"):
+        default_value = None
+        return self.__run_method_on_plugins(
+            "observability_api_call", default_value, request, response
+        )
+
+    def observability_event_delivery_attempt(
+        self, attempt: "EventDeliveryAttempt", next_retry: Optional["datetime"] = None
+    ):
+        default_value = None
+        return self.__run_method_on_plugins(
+            "observability_event_delivery_attempt", default_value, attempt, next_retry
         )
 
     def sale_created(self, sale: "Sale", current_catalogue):
