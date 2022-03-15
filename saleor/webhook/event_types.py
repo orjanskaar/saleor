@@ -1,5 +1,6 @@
 from ..core.permissions import (
     AccountPermissions,
+    AppPermission,
     CheckoutPermissions,
     DiscountPermissions,
     OrderPermissions,
@@ -65,6 +66,9 @@ class WebhookEventAsyncType:
     TRANSLATION_CREATED = "translation_created"
     TRANSLATION_UPDATED = "translation_updated"
 
+    OBSERVABILITY_API_CALLS = "observability_api_calls"
+    OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS = "observability_event_delivery_attempts"
+
     DISPLAY_LABELS = {
         ANY: "Any events",
         ORDER_CREATED: "Order created",
@@ -105,6 +109,8 @@ class WebhookEventAsyncType:
         PAGE_DELETED: "Page Deleted",
         TRANSLATION_CREATED: "Create translation",
         TRANSLATION_UPDATED: "Update translation",
+        OBSERVABILITY_API_CALLS: "Report batch of API call",
+        OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS: "Report batch of event delivery attempts",
     }
 
     CHOICES = [
@@ -147,9 +153,18 @@ class WebhookEventAsyncType:
         (PAGE_DELETED, DISPLAY_LABELS[PAGE_DELETED]),
         (TRANSLATION_CREATED, DISPLAY_LABELS[TRANSLATION_CREATED]),
         (TRANSLATION_UPDATED, DISPLAY_LABELS[TRANSLATION_UPDATED]),
+        (OBSERVABILITY_API_CALLS, DISPLAY_LABELS[OBSERVABILITY_API_CALLS]),
+        (
+            OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS,
+            DISPLAY_LABELS[OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS],
+        ),
     ]
 
     ALL = [event[0] for event in CHOICES]
+    OBSERVABILITY_EVENTS = [
+        OBSERVABILITY_API_CALLS,
+        OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS,
+    ]
 
     PERMISSIONS = {
         ORDER_CREATED: OrderPermissions.MANAGE_ORDERS,
@@ -190,6 +205,8 @@ class WebhookEventAsyncType:
         PAGE_DELETED: PagePermissions.MANAGE_PAGES,
         TRANSLATION_CREATED: SitePermissions.MANAGE_TRANSLATIONS,
         TRANSLATION_UPDATED: SitePermissions.MANAGE_TRANSLATIONS,
+        OBSERVABILITY_API_CALLS: AppPermission.MANAGE_APPS,
+        OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS: AppPermission.MANAGE_APPS,
     }
 
 
