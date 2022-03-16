@@ -197,6 +197,7 @@ class GraphQLView(View):
             # we can calculate the RAW UTF-8 size using the length of
             # response.content of type 'bytes'
             span.set_tag("http.content_length", len(response.content))
+            observability_api_call(request, response)
 
             return response
 
@@ -482,3 +483,9 @@ def set_query_cost_on_result(execution_result: ExecutionResult, query_cost):
             }
         )
     return execution_result
+
+
+def observability_api_call(request, response: JsonResponse):
+    if settings.OBSERVABILITY_ACTIVE:
+        if settings.OBSERVABILITY_REPORT_ALL_API_CALLS or getattr(request, "app", None):
+            request.plugins.observability_api_call(request, response)
