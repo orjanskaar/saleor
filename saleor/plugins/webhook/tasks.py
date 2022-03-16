@@ -9,7 +9,7 @@ from urllib.parse import urlparse, urlunparse
 import boto3
 import requests
 from botocore.exceptions import ClientError
-from celery.exceptions import MaxRetriesExceededError
+from celery.exceptions import MaxRetriesExceededError, Retry
 from celery.utils.log import get_task_logger
 from google.cloud import pubsub_v1
 from requests.exceptions import RequestException
@@ -24,6 +24,7 @@ from ...site.models import Site
 from ...webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
 from ...webhook.models import Webhook
 from . import signature_for_payload
+from .observability import observability_event_delivery_attempt, task_next_retry_date
 from .utils import (
     attempt_update,
     catch_duration_time,
@@ -282,6 +283,12 @@ def send_webhook_request_async(self, event_delivery_id):
             try:
                 countdown = self.retry_backoff * (2**self.request.retries)
                 self.retry(countdown=countdown, **self.retry_kwargs)
+            except Retry as retry_error:
+                next_retry = task_next_retry_date(retry_error)
+                observability_event_delivery_attempt(
+                    delivery.event_type, attempt, next_retry
+                )
+                raise retry_error
             except MaxRetriesExceededError:
                 task_logger.warning(
                     "[Webhook ID: %r] Failed request to %r: exceeded retry limit."
@@ -304,6 +311,7 @@ def send_webhook_request_async(self, event_delivery_id):
         response = WebhookResponse(content=str(e), status=EventDeliveryStatus.FAILED)
         attempt_update(attempt, response)
         delivery_update(delivery=delivery, status=EventDeliveryStatus.FAILED)
+    observability_event_delivery_attempt(delivery.event_type, attempt)
     clear_successful_delivery(delivery)
 
 
@@ -377,6 +385,7 @@ def send_webhook_request_sync(
 
     attempt_update(attempt, response)
     delivery_update(delivery, response.status)
+    observability_event_delivery_attempt(delivery.event_type, attempt)
     clear_successful_delivery(delivery)
 
     return response_data if response.status == EventDeliveryStatus.SUCCESS else None
