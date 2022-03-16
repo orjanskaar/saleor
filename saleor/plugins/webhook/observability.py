@@ -1,14 +1,24 @@
 import math
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Optional, cast
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Optional, cast
 from uuid import uuid4
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 from kombu import Connection, Exchange, Queue
 from kombu.exceptions import ChannelError, KombuError
 from kombu.simple import SimpleQueue
+
+from ...plugins.manager import get_plugins_manager
+from ...webhook.event_types import WebhookEventAsyncType
+
+if TYPE_CHECKING:
+    from celery.exceptions import Retry
+
+    from ...core.models import EventDeliveryAttempt
 
 OBSERVABILITY_EXCHANGE_NAME = "observability_exchange"
 CACHE_KEY = "buffer_"
@@ -127,3 +137,20 @@ def observability_connection(
         raise ObservabilityUnknownError() from err
     finally:
         conn.release()
+
+
+def task_next_retry_date(retry_error: "Retry") -> Optional[datetime]:
+    if isinstance(retry_error.when, (int, float)):
+        return timezone.now() + timedelta(seconds=retry_error.when)
+    elif isinstance(retry_error.when, datetime):
+        return retry_error.when
+    return None
+
+
+def observability_event_delivery_attempt(
+    event_type: str,
+    attempt: "EventDeliveryAttempt",
+    next_retry: Optional[datetime] = None,
+):
+    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
+        get_plugins_manager().observability_event_delivery_attempt(attempt, next_retry)

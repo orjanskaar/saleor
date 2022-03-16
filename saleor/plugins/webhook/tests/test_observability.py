@@ -1,12 +1,17 @@
+from datetime import datetime
 from typing import Optional
+from unittest import mock
 from unittest.mock import patch
 
 import pytest
+import pytz
+from celery.exceptions import Retry
+from freezegun import freeze_time
 from kombu import Connection
 from kombu.exceptions import ConnectionError as KombuConnectionError
 from kombu.exceptions import KombuError
 
-from ....webhook.event_types import WebhookEventAsyncType
+from ....webhook.event_types import WebhookEventAsyncType, WebhookEventSyncType
 from ..observability import (
     CACHE_KEY,
     FullObservabilityEventsBuffer,
@@ -15,6 +20,8 @@ from ..observability import (
     ObservabilityKombuError,
     ObservabilityUnknownError,
     observability_connection,
+    observability_event_delivery_attempt,
+    task_next_retry_date,
 )
 
 EVENT_TYPE = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
@@ -134,3 +141,45 @@ def test_observability_connection_catch_all_exceptions(
         with observability_connection(memory_broker) as conn:
             with ObservabilityBuffer(conn, EVENT_TYPE) as buffer:
                 buffer.put_event({"test": "data"})
+
+
+@pytest.mark.parametrize(
+    "retry, next_retry_date",
+    [
+        (Retry(), None),
+        (Retry(when=60 * 10), datetime(1914, 6, 28, 11, tzinfo=pytz.utc)),
+        (Retry(when=datetime(1914, 6, 28, 11)), datetime(1914, 6, 28, 11)),
+    ],
+)
+@freeze_time("1914-06-28 10:50")
+def test_task_next_retry_date(retry, next_retry_date):
+    assert task_next_retry_date(retry) == next_retry_date
+
+
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        et
+        for et in WebhookEventAsyncType.ALL + WebhookEventSyncType.ALL
+        if et not in WebhookEventAsyncType.OBSERVABILITY_EVENTS
+    ],
+)
+@mock.patch(
+    "saleor.plugins.manager.PluginsManager.observability_event_delivery_attempt"
+)
+def test_observability_event_delivery_attempt_fired(
+    mock_report_event_delivery_attempt, event_type, event_attempt
+):
+    observability_event_delivery_attempt(event_type, event_attempt)
+    mock_report_event_delivery_attempt.assert_called_once_with(event_attempt, None)
+
+
+@pytest.mark.parametrize("event_type", WebhookEventAsyncType.OBSERVABILITY_EVENTS)
+@mock.patch(
+    "saleor.plugins.manager.PluginsManager.observability_event_delivery_attempt"
+)
+def test_observability_event_delivery_attempt_not_fired(
+    mock_report_event_delivery_attempt, event_type, event_attempt
+):
+    observability_event_delivery_attempt(event_type, event_attempt)
+    mock_report_event_delivery_attempt.assert_not_called()
