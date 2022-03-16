@@ -8,12 +8,14 @@ from unittest.mock import ANY
 
 import graphene
 import pytest
+from django.http import JsonResponse
 from django.utils import timezone
 from freezegun import freeze_time
 from measurement.measures import Weight
 from prices import Money
 
 from ... import __version__
+from ...core import EventDeliveryStatus
 from ...core.utils.json_serializer import CustomJsonEncoder
 from ...discount import DiscountValueType, OrderDiscountType
 from ...graphql.utils import get_user_or_app_from_context
@@ -26,6 +28,7 @@ from ...plugins.webhook.utils import from_payment_app_id
 from ...product.models import ProductVariant
 from ...shipping.interface import ShippingMethodData
 from ...warehouse import WarehouseClickAndCollectOption
+from ...webhook.event_types import WebhookEventAsyncType
 from ..payloads import (
     ORDER_FIELDS,
     PRODUCT_VARIANT_FIELDS,
@@ -45,6 +48,8 @@ from ..payloads import (
     generate_requestor,
     generate_sale_payload,
     generate_translation_payload,
+    generate_truncated_api_call_payload,
+    generate_truncated_event_delivery_attempt_payload,
     hide_sensitive_headers,
 )
 
@@ -1041,3 +1046,129 @@ def test_generate_meta(app, rf):
 )
 def test_hide_sensitive_headers(headers, sensitive, expected):
     assert hide_sensitive_headers(headers, sensitive_headers=sensitive) == expected
+
+
+def test_generate_truncated_api_call_payload(app, rf):
+    request = rf.post(
+        "/graphql", data={"request": "data"}, content_type="application/json"
+    )
+    request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.app = app
+    response = JsonResponse({"response": "data"})
+
+    payload = generate_truncated_api_call_payload(request, response, 1024)
+
+    assert payload == {
+        "request": {
+            "time": request.request_time.timestamp(),
+            "headers": {
+                "Content-Length": "19",
+                "Content-Type": "application/json",
+                "Cookie": "",
+            },
+            "body": {"text": '{"request": "data"}', "truncated": False},
+            "contentLength": 19,
+        },
+        "response": {
+            "headers": {"Content-Type": "application/json"},
+            "body": {"text": '{"response": "data"}', "truncated": False},
+            "statusCode": 200,
+            "reasonPhrase": "OK",
+        },
+        "app": {
+            "id": graphene.Node.to_global_id("App", app.pk),
+            "name": "Sample app objects",
+        },
+    }
+
+
+def test_generate_truncated_api_call_payload_failed(app, rf):
+    request = rf.post(
+        "/graphql", data={"request": "data"}, content_type="application/json"
+    )
+    request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.app = app
+    response = JsonResponse({"response": "data"})
+
+    with pytest.raises(ValueError):
+        generate_truncated_api_call_payload(request, response, 10)
+
+
+def test_generate_truncated_api_call_payload_from_post_request(app, rf):
+    request = rf.post("/graphql", {"request": "data", "choices": ("a", "b", "d")})
+    request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.app = app
+    response = JsonResponse({"response": "data"})
+
+    payload = generate_truncated_api_call_payload(request, response, 1024)
+
+    assert payload["request"]["body"] == {
+        "text": "request=data&choices=a&choices=b&choices=d",
+        "truncated": False,
+    }
+
+
+def test_generate_truncated_api_call_payload_not_from_app_payload(rf):
+    request = rf.post(
+        "/graphql", data={"request": "data"}, content_type="application/json"
+    )
+    request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.app = None
+    response = JsonResponse({"response": "data"})
+
+    payload = generate_truncated_api_call_payload(request, response, 1024)
+
+    assert payload["app"] is None
+
+
+def test_generate_truncated_event_delivery_attempt_payload(event_attempt):
+    delivery = event_attempt.delivery
+    webhook = delivery.webhook
+    app = webhook.app
+
+    payload = generate_truncated_event_delivery_attempt_payload(
+        event_attempt, None, 1024
+    )
+
+    assert payload == {
+        "eventDeliveryAttempt": {
+            "id": graphene.Node.to_global_id("EventDeliveryAttempt", event_attempt.pk),
+            "time": event_attempt.created_at.timestamp(),
+            "duration": None,
+            "status": EventDeliveryStatus.PENDING,
+            "nextRetry": None,
+        },
+        "request": {"headers": {}},
+        "response": {
+            "headers": {},
+            "body": {"text": "example_response", "truncated": False},
+        },
+        "eventDelivery": {
+            "id": graphene.Node.to_global_id("EventDelivery", delivery.pk),
+            "payload": {
+                "text": '{"payload_key": "payload_value"}',
+                "truncated": False,
+            },
+            "status": EventDeliveryStatus.PENDING,
+            "type": WebhookEventAsyncType.ANY,
+        },
+        "webhook": {
+            "id": graphene.Node.to_global_id("Webhook", webhook.pk),
+            "name": "Simple webhook",
+            "targetUrl": "http://www.example.com/test",
+        },
+        "app": {
+            "id": graphene.Node.to_global_id("App", app.pk),
+            "name": "Sample app objects",
+        },
+    }
+
+
+def test_generate_truncated_event_delivery_attempt_payload_with_next_retry_date(
+    event_attempt,
+):
+    next_retry_date = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    payload = generate_truncated_event_delivery_attempt_payload(
+        event_attempt, next_retry=next_retry_date, size_limit=1024
+    )
+    assert payload["eventDeliveryAttempt"]["nextRetry"] == next_retry_date.timestamp()
