@@ -13,6 +13,7 @@ from .. import __version__
 from ..account.models import User
 from ..attribute.models import AttributeValueTranslation
 from ..checkout.models import Checkout
+from ..core.auth import DEFAULT_AUTH_HEADER, SALEOR_AUTH_HEADER
 from ..core.prices import quantize_price, quantize_price_fields
 from ..core.utils import build_absolute_uri
 from ..core.utils.anonymization import (
@@ -1048,3 +1049,16 @@ def generate_excluded_shipping_methods_for_checkout_payload(
         ],
     }
     return json.dumps(payload, cls=CustomJsonEncoder)
+
+
+SENSITIVE_ENV_KEYS = (SALEOR_AUTH_HEADER, DEFAULT_AUTH_HEADER)
+SENSITIVE_HEADERS = tuple(x.removeprefix("HTTP_") for x in SENSITIVE_ENV_KEYS)
+
+
+def hide_sensitive_headers(
+    headers: Dict[str, str], sensitive_headers: tuple[str, ...] = SENSITIVE_HEADERS
+) -> Dict[str, str]:
+    return {
+        key: val if key.upper().replace("-", "_") not in sensitive_headers else "***"
+        for key, val in headers.items()
+    }

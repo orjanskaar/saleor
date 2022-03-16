@@ -7,6 +7,7 @@ from unittest import mock
 from unittest.mock import ANY
 
 import graphene
+import pytest
 from django.utils import timezone
 from freezegun import freeze_time
 from measurement.measures import Weight
@@ -44,6 +45,7 @@ from ..payloads import (
     generate_requestor,
     generate_sale_payload,
     generate_translation_payload,
+    hide_sensitive_headers,
 )
 
 
@@ -1015,3 +1017,27 @@ def test_generate_meta(app, rf):
         "issued_at": timestamp,
         "version": __version__,
     }
+
+
+@pytest.mark.parametrize(
+    "headers,sensitive,expected",
+    [
+        (
+            {"header1": "text", "header2": "text"},
+            ("AUTHORIZATION", "AUTHORIZATION_BEARER"),
+            {"header1": "text", "header2": "text"},
+        ),
+        (
+            {"header1": "text", "authorization": "secret"},
+            ("AUTHORIZATION", "AUTHORIZATION_BEARER"),
+            {"header1": "text", "authorization": "***"},
+        ),
+        (
+            {"HEADER1": "text", "authorization-bearer": "secret"},
+            ("AUTHORIZATION", "AUTHORIZATION_BEARER"),
+            {"HEADER1": "text", "authorization-bearer": "***"},
+        ),
+    ],
+)
+def test_hide_sensitive_headers(headers, sensitive, expected):
+    assert hide_sensitive_headers(headers, sensitive_headers=sensitive) == expected
