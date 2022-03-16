@@ -2,6 +2,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, List, Optional, Union
 
+from django.conf import settings
+
 from ...app.models import App
 from ...core import EventDeliveryStatus
 from ...core.models import EventDelivery
@@ -29,9 +31,17 @@ from ...webhook.payloads import (
     generate_requestor,
     generate_sale_payload,
     generate_translation_payload,
+    generate_truncated_api_call_payload,
+    generate_truncated_event_delivery_attempt_payload,
 )
 from ..base_plugin import BasePlugin, ExcludedShippingMethod
 from .const import CACHE_EXCLUDED_SHIPPING_KEY
+from .observability import (
+    FullObservabilityEventsBuffer,
+    ObservabilityBuffer,
+    ObservabilityError,
+    observability_connection,
+)
 from .shipping import get_excluded_shipping_data, parse_list_shipping_methods_response
 from .tasks import (
     _get_webhooks_for_event,
@@ -47,8 +57,13 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
+    from django.http import HttpRequest, JsonResponse
+
     from ...account.models import User
     from ...checkout.models import Checkout
+    from ...core.models import EventDeliveryAttempt
     from ...discount.models import Sale
     from ...graphql.discount.mutations import NodeCatalogueInfo
     from ...invoice.models import Invoice
@@ -379,6 +394,55 @@ class WebhookPlugin(BasePlugin):
                 [stock], self.requestor
             )
             trigger_webhooks_async(product_variant_data, event_type, webhooks)
+
+    def observability_api_call(
+        self, request: "HttpRequest", response: "JsonResponse", previous_value: Any
+    ) -> Any:
+        if not self.active:
+            return previous_value
+        if not settings.OBSERVABILITY_ACTIVE:
+            return None
+        event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
+        if _get_webhooks_for_event(event_type):
+            try:
+                event = generate_truncated_api_call_payload(
+                    request, response, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
+                )
+                with observability_connection() as conn:
+                    with ObservabilityBuffer(conn, event_type) as buffer:
+                        buffer.put_event(event)
+            except ValueError as e:
+                logger.warning("Observability error: %s", e)
+            except FullObservabilityEventsBuffer as e:
+                logger.info("Observability error: %s", e)
+            except ObservabilityError as e:
+                logger.error("Observability error: %s", e)
+
+    def observability_event_delivery_attempt(
+        self,
+        attempt: "EventDeliveryAttempt",
+        next_retry: Optional["datetime"],
+        previous_value: Any,
+    ) -> Any:
+        if not self.active:
+            return previous_value
+        if not settings.OBSERVABILITY_ACTIVE:
+            return None
+        event_type = WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS
+        if _get_webhooks_for_event(event_type):
+            try:
+                event = generate_truncated_event_delivery_attempt_payload(
+                    attempt, next_retry, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
+                )
+                with observability_connection() as conn:
+                    with ObservabilityBuffer(conn, event_type) as buffer:
+                        buffer.put_event(event)
+            except ValueError as e:
+                logger.warning("Observability error: %s", e)
+            except FullObservabilityEventsBuffer as e:
+                logger.info("Observability error: %s", e)
+            except ObservabilityError as e:
+                logger.error("Observability error: %s", e)
 
     def checkout_created(self, checkout: "Checkout", previous_value: Any) -> Any:
         if not self.active:
