@@ -37,6 +37,7 @@ from . import traced_payload_generator
 from .event_types import WebhookEventAsyncType
 from .payload_serializers import PayloadSerializer
 from .serializers import (
+    JsonTruncText,
     serialize_checkout_lines,
     serialize_product_or_variant_attributes,
 )
@@ -47,6 +48,8 @@ if TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest, JsonResponse
+
     from ..discount.models import Sale
     from ..graphql.discount.mutations import NodeCatalogueInfo
     from ..invoice.models import Invoice
@@ -1062,3 +1065,56 @@ def hide_sensitive_headers(
         key: val if key.upper().replace("-", "_") not in sensitive_headers else "***"
         for key, val in headers.items()
     }
+
+
+EMPTY_TRUNC_TEXT = asdict(JsonTruncText())
+
+
+def generate_truncated_api_call_payload(
+    request: "HttpRequest", response: "JsonResponse", size_limit: int
+) -> dict:
+    req_time = getattr(request, "request_time", timezone.now())
+    req_data = {
+        "time": req_time.timestamp(),
+        "headers": hide_sensitive_headers(dict(request.headers)),
+        "contentLength": int(request.headers.get("Content-Length", 0)),
+        "body": EMPTY_TRUNC_TEXT,
+    }
+    res_data = {
+        "headers": hide_sensitive_headers(dict(response.headers)),
+        "statusCode": response.status_code,
+        "reasonPhrase": response.reason_phrase,
+        "body": EMPTY_TRUNC_TEXT,
+    }
+    app_data = None
+    if app := getattr(request, "app", None):
+        app_data = {
+            "id": graphene.Node.to_global_id("App", app.id),
+            "name": app.name,
+        }
+    data = {"request": req_data, "response": res_data, "app": app_data}
+    initial_size = len(json.dumps(data))
+    remaining_limit = size_limit - initial_size
+    if remaining_limit < 0:
+        raise ValueError(
+            f"API call payload is too big: {initial_size}. Can't truncate to {size_limit} bytes"
+        )
+    elif remaining_limit == 0:
+        return data
+    try:
+        if request.POST:
+            req_body = JsonTruncText.truncate(
+                request.POST.urlencode(), remaining_limit // 2
+            )
+        else:
+            req_body = JsonTruncText.truncate(
+                request.body.decode("utf-8"), remaining_limit // 2
+            )
+    except ValueError:
+        req_body = JsonTruncText()
+    res_body = JsonTruncText.truncate(
+        response.content.decode(response.charset), remaining_limit - req_body.byte_size
+    )
+    req_data["body"] = asdict(req_body)
+    res_data["body"] = asdict(res_body)
+    return data
