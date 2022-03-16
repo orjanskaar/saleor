@@ -154,3 +154,9 @@ def observability_event_delivery_attempt(
 ):
     if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
         get_plugins_manager().observability_event_delivery_attempt(attempt, next_retry)
+
+
+def observability_buffer_put_event(event_type: str, event: dict):
+    with observability_connection() as conn:
+        with ObservabilityBuffer(conn, event_type) as buffer:
+            buffer.put_event(event)

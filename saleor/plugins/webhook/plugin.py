@@ -38,9 +38,8 @@ from ..base_plugin import BasePlugin, ExcludedShippingMethod
 from .const import CACHE_EXCLUDED_SHIPPING_KEY
 from .observability import (
     FullObservabilityEventsBuffer,
-    ObservabilityBuffer,
     ObservabilityError,
-    observability_connection,
+    observability_buffer_put_event,
 )
 from .shipping import get_excluded_shipping_data, parse_list_shipping_methods_response
 from .tasks import (
@@ -398,19 +397,15 @@ class WebhookPlugin(BasePlugin):
     def observability_api_call(
         self, request: "HttpRequest", response: "JsonResponse", previous_value: Any
     ) -> Any:
-        if not self.active:
+        if not self.active or not settings.OBSERVABILITY_ACTIVE:
             return previous_value
-        if not settings.OBSERVABILITY_ACTIVE:
-            return None
         event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
         if _get_webhooks_for_event(event_type):
             try:
                 event = generate_truncated_api_call_payload(
                     request, response, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
                 )
-                with observability_connection() as conn:
-                    with ObservabilityBuffer(conn, event_type) as buffer:
-                        buffer.put_event(event)
+                observability_buffer_put_event(event_type, event)
             except ValueError as e:
                 logger.warning("Observability error: %s", e)
             except FullObservabilityEventsBuffer as e:
@@ -424,19 +419,15 @@ class WebhookPlugin(BasePlugin):
         next_retry: Optional["datetime"],
         previous_value: Any,
     ) -> Any:
-        if not self.active:
+        if not self.active or not settings.OBSERVABILITY_ACTIVE:
             return previous_value
-        if not settings.OBSERVABILITY_ACTIVE:
-            return None
         event_type = WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS
         if _get_webhooks_for_event(event_type):
             try:
                 event = generate_truncated_event_delivery_attempt_payload(
                     attempt, next_retry, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
                 )
-                with observability_connection() as conn:
-                    with ObservabilityBuffer(conn, event_type) as buffer:
-                        buffer.put_event(event)
+                observability_buffer_put_event(event_type, event)
             except ValueError as e:
                 logger.warning("Observability error: %s", e)
             except FullObservabilityEventsBuffer as e:
