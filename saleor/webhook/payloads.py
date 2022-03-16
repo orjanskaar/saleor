@@ -2,6 +2,7 @@ import json
 import uuid
 from collections import defaultdict
 from dataclasses import asdict
+from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
 
 import graphene
@@ -48,8 +49,11 @@ if TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from django.http import HttpRequest, JsonResponse
 
+    from ..core.models import EventDeliveryAttempt
     from ..discount.models import Sale
     from ..graphql.discount.mutations import NodeCatalogueInfo
     from ..invoice.models import Invoice
@@ -1097,7 +1101,7 @@ def generate_truncated_api_call_payload(
     remaining_limit = size_limit - initial_size
     if remaining_limit < 0:
         raise ValueError(
-            f"API call payload is too big: {initial_size}. Can't truncate to {size_limit} bytes"
+            f"API call payload is too big: {initial_size}. Can't truncate to {size_limit}"
         )
     elif remaining_limit == 0:
         return data
@@ -1117,4 +1121,70 @@ def generate_truncated_api_call_payload(
     )
     req_data["body"] = asdict(req_body)
     res_data["body"] = asdict(res_body)
+    return data
+
+
+def generate_truncated_event_delivery_attempt_payload(
+    attempt: "EventDeliveryAttempt", next_retry: Optional["datetime"], size_limit: int
+) -> dict:
+    delivery_data, webhook_data, app_data = {}, {}, {}
+    payload = None
+    if delivery := attempt.delivery:
+        delivery_data = {
+            "id": graphene.Node.to_global_id("EventDelivery", delivery.pk),
+            "status": delivery.status,
+            "type": delivery.event_type,
+            "payload": EMPTY_TRUNC_TEXT,
+        }
+        if delivery.payload:
+            payload = delivery.payload.payload
+        if webhook := delivery.webhook:
+            app_data = {
+                "id": graphene.Node.to_global_id("App", webhook.app.pk),
+                "name": webhook.app.name,
+            }
+            webhook_data = {
+                "id": graphene.Node.to_global_id("Webhook", webhook.pk),
+                "name": webhook.name,
+                "targetUrl": webhook.target_url,
+            }
+    request_headers, response_headers = {}, {}
+    try:
+        request_headers = json.loads(attempt.request_headers)
+        response_headers = json.loads(attempt.response_headers)
+    except (JSONDecodeError, TypeError):
+        pass
+    data = {
+        "eventDeliveryAttempt": {
+            "id": graphene.Node.to_global_id("EventDeliveryAttempt", attempt.pk),
+            "time": attempt.created_at.timestamp(),
+            "duration": attempt.duration,
+            "status": attempt.status,
+            "nextRetry": next_retry.timestamp() if next_retry else None,
+        },
+        "request": {
+            "headers": request_headers,
+        },
+        "response": {
+            "headers": response_headers,
+            "body": EMPTY_TRUNC_TEXT,
+        },
+        "eventDelivery": delivery_data,
+        "webhook": webhook_data,
+        "app": app_data,
+    }
+    initial_size = len(json.dumps(data))
+    remaining_limit = size_limit - initial_size
+    if remaining_limit < 0:
+        raise ValueError(
+            f"EventDeliveryAttempt payload is too big: {initial_size}. Can't truncate to {size_limit}"
+        )
+    elif remaining_limit == 0:
+        return data
+    response_body = JsonTruncText.truncate(attempt.response or "", remaining_limit // 2)
+    data["response"]["body"] = asdict(response_body)
+    if payload is not None:
+        delivery_data["payload"] = asdict(
+            JsonTruncText.truncate(payload, remaining_limit - response_body.byte_size)
+        )
     return data
