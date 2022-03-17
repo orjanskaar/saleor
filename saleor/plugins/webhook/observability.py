@@ -157,6 +157,24 @@ def observability_event_delivery_attempt(
 
 
 def observability_buffer_put_event(event_type: str, event: dict):
+    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
+        raise ValueError(f"Unsupported event_type value: {event_type}")
     with observability_connection() as conn:
         with ObservabilityBuffer(conn, event_type) as buffer:
             buffer.put_event(event)
+
+
+def observability_buffer_get_events(event_type: str) -> list[dict]:
+    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
+        raise ValueError(f"Unsupported event_type value: {event_type}")
+    with observability_connection() as conn:
+        with ObservabilityBuffer(conn, event_type) as buffer:
+            return buffer.get_events()
+
+
+def observability_buffer_size_in_batches(event_type: str) -> int:
+    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
+        raise ValueError(f"Unsupported event_type value: {event_type}")
+    with observability_connection() as conn:
+        with ObservabilityBuffer(conn, event_type) as buffer:
+            return buffer.size_in_batches()
