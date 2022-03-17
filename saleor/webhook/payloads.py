@@ -1078,8 +1078,10 @@ EMPTY_TRUNC_TEXT = asdict(JsonTruncText())
 def generate_truncated_api_call_payload(
     request: "HttpRequest",
     response: "JsonResponse",
-    size_limit: int = settings.OBSERVABILITY_MAX_PAYLOAD_SIZE,
+    size_limit: Optional[int] = None,
 ) -> dict:
+    if size_limit is None:
+        size_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
     req_time = getattr(request, "request_time", timezone.now())
     req_data = {
         "time": req_time.timestamp(),
@@ -1128,8 +1130,10 @@ def generate_truncated_api_call_payload(
 def generate_truncated_event_delivery_attempt_payload(
     attempt: "EventDeliveryAttempt",
     next_retry: Optional["datetime"],
-    size_limit: int = settings.OBSERVABILITY_MAX_PAYLOAD_SIZE,
+    size_limit: Optional[int] = None,
 ) -> dict:
+    if size_limit is None:
+        size_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
     delivery_data, webhook_data, app_data = {}, {}, {}
     payload = None
     if delivery := attempt.delivery:

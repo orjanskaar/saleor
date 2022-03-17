@@ -60,16 +60,16 @@ class ObservabilityBuffer(SimpleQueue):
         self,
         channel,
         event_type: str,
-        batch: int = settings.OBSERVABILITY_BUFFER_BATCH,
-        max_length: int = settings.OBSERVABILITY_BUFFER_SIZE_LIMIT,
+        batch: int = 10,
+        max_length: int = 100,
     ):
         self.queue_name = self._queue_name(event_type)
         routing_key = self._routing_key(event_type)
         queue = Queue(self.queue_name, EXCHANGE, routing_key=routing_key)
         super().__init__(channel, queue)
         self.event_type = event_type
-        self.batch = batch if batch > 0 else 0
-        self.max_length = max_length if max_length > 0 else 0
+        self.batch = max(0, batch)
+        self.max_length = max(0, max_length)
 
     def get(self, block=True, timeout=DRAIN_EVENTS_TIMEOUT):
         return super().get(block=block, timeout=timeout)
@@ -149,25 +149,30 @@ def observability_event_delivery_attempt(
         get_plugins_manager().observability_event_delivery_attempt(attempt, next_retry)
 
 
-def observability_buffer_put_event(event_type: str, event: dict):
+@contextmanager
+def _get_buffer(event_type: str) -> Generator[ObservabilityBuffer, None, None]:
     if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
         raise ValueError(f"Unsupported event_type value: {event_type}")
     with observability_connection() as conn:
-        with ObservabilityBuffer(conn, event_type) as buffer:
-            buffer.put_event(event)
+        with ObservabilityBuffer(
+            conn,
+            event_type,
+            batch=settings.OBSERVABILITY_BUFFER_BATCH,
+            max_length=settings.OBSERVABILITY_BUFFER_SIZE_LIMIT,
+        ) as buffer:
+            yield buffer
+
+
+def observability_buffer_put_event(event_type: str, event: dict):
+    with _get_buffer(event_type) as buffer:
+        buffer.put_event(event)
 
 
 def observability_buffer_get_events(event_type: str) -> List[dict]:
-    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
-        raise ValueError(f"Unsupported event_type value: {event_type}")
-    with observability_connection() as conn:
-        with ObservabilityBuffer(conn, event_type) as buffer:
-            return buffer.get_events()
+    with _get_buffer(event_type) as buffer:
+        return buffer.get_events()
 
 
 def observability_buffer_size_in_batches(event_type: str) -> int:
-    if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
-        raise ValueError(f"Unsupported event_type value: {event_type}")
-    with observability_connection() as conn:
-        with ObservabilityBuffer(conn, event_type) as buffer:
-            return buffer.size_in_batches()
+    with _get_buffer(event_type) as buffer:
+        return buffer.size_in_batches()
