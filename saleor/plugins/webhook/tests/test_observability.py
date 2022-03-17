@@ -1,11 +1,14 @@
+import json
 from datetime import datetime
 from typing import Optional
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import pytz
+from celery.canvas import Signature
 from celery.exceptions import Retry
+from django.conf import settings
 from freezegun import freeze_time
 from kombu import Connection
 from kombu.exceptions import ConnectionError as KombuConnectionError
@@ -23,6 +26,7 @@ from ..observability import (
     observability_event_delivery_attempt,
     task_next_retry_date,
 )
+from ..tasks import observability_reporter_task, observability_send_events
 
 EVENT_TYPE = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
 
@@ -183,3 +187,54 @@ def test_observability_event_delivery_attempt_not_fired(
 ):
     observability_event_delivery_attempt(event_type, event_attempt)
     mock_report_event_delivery_attempt.assert_not_called()
+
+
+@mock.patch("saleor.plugins.webhook.tasks.send_webhook_using_scheme_method")
+@mock.patch("saleor.plugins.webhook.tasks._get_webhooks_for_event")
+@mock.patch("saleor.plugins.webhook.tasks.observability_buffer_get_events")
+def test_observability_send_events(
+    mocked_buffer_get_events,
+    mocked_get_webhooks_for_event,
+    mocked_send_response,
+    any_webhook,
+    settings,
+    webhook_response,
+):
+    event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
+    events_data = [{"observability": "event"}]
+    mocked_send_response.return_value = webhook_response
+    mocked_get_webhooks_for_event.return_value = [any_webhook]
+    settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
+    mocked_buffer_get_events.return_value = events_data
+
+    observability_send_events(event_type)
+
+    mocked_send_response.assert_called_once_with(
+        any_webhook.target_url,
+        "mirumee.com",
+        any_webhook.secret_key,
+        event_type,
+        json.dumps(events_data),
+    )
+
+
+@mock.patch("saleor.plugins.webhook.tasks.group")
+@mock.patch("saleor.plugins.webhook.tasks.observability_buffer_size_in_batches")
+def test_observability_reporter_task(
+    mocked_buffer_size_in_batches, mocked_celery_group
+):
+    batches_count = 3
+    mocked_buffer_size_in_batches.return_value = batches_count
+    mocked_celery_group.return_value = Mock()
+
+    observability_reporter_task()
+
+    mocked_celery_group.assert_called_once()
+    tasks = mocked_celery_group.call_args.args[0]
+    assert isinstance(tasks, list)
+    assert len(tasks) == batches_count * len(WebhookEventAsyncType.OBSERVABILITY_EVENTS)
+    assert isinstance(tasks[0], Signature)
+    expiration_time = settings.OBSERVABILITY_REPORT_PERIOD.total_seconds()
+    mocked_celery_group.return_value.apply_async.assert_called_once_with(
+        expires=expiration_time
+    )
