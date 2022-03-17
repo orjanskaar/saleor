@@ -7,7 +7,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
-from kombu import Connection, Exchange, Queue
+from kombu import Connection, Exchange, Queue, pools
 from kombu.exceptions import ChannelError, KombuError
 from kombu.simple import SimpleQueue
 
@@ -110,7 +110,7 @@ class ObservabilityBuffer(SimpleQueue):
         return events
 
 
-def connection() -> Connection:
+def observability_broker() -> Connection:
     return Connection(
         settings.OBSERVABILITY_BROKER_URL, connect_timeout=CONNECT_TIMEOUT
     )
@@ -120,16 +120,17 @@ def connection() -> Connection:
 def observability_connection(
     conn: Optional[Connection] = None,
 ) -> Generator[Connection, None, None]:
-    conn = conn if conn else connection()
-    connection_errors = conn.connection_errors + conn.channel_errors
+    connection = conn if conn else observability_broker()
+    connection_errors = connection.connection_errors + connection.channel_errors
     try:
-        yield conn
+        connection = pools.connections[connection].acquire(block=False)
+        yield connection
     except connection_errors as err:
         raise ObservabilityConnectionError() from err
     except KombuError as err:
         raise ObservabilityKombuError() from err
     finally:
-        conn.release()
+        connection.release()
 
 
 def task_next_retry_date(retry_error: "Retry") -> Optional[datetime]:
