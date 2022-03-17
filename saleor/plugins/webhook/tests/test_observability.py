@@ -21,7 +21,6 @@ from ..observability import (
     ObservabilityBuffer,
     ObservabilityConnectionError,
     ObservabilityKombuError,
-    ObservabilityUnknownError,
     observability_connection,
     observability_event_delivery_attempt,
     task_next_retry_date,
@@ -133,7 +132,7 @@ def test_buffer_max_length(memory_broker):
     [
         (KombuConnectionError, ObservabilityConnectionError),
         (KombuError, ObservabilityKombuError),
-        (Exception, ObservabilityUnknownError),
+        (Exception, Exception),
     ],
 )
 @patch("saleor.plugins.webhook.observability.ObservabilityBuffer.put_event")

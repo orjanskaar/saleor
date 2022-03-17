@@ -39,13 +39,9 @@ class ObservabilityConnectionError(ObservabilityError):
     """Observability broker connection error."""
 
 
-class ObservabilityUnknownError(ObservabilityError):
-    """Observability unknown error."""
-
-
 class FullObservabilityEventsBuffer(ObservabilityError):
     def __init__(self, event_type: str):
-        super().__init__(f"[{event_type}] Observability buffer is full. Event skiped.")
+        super().__init__(f"Observability buffer ({event_type}) is full.")
         self.event_type = event_type
 
 
@@ -133,8 +129,6 @@ def observability_connection(
         raise ObservabilityConnectionError() from err
     except KombuError as err:
         raise ObservabilityKombuError() from err
-    except Exception as err:
-        raise ObservabilityUnknownError() from err
     finally:
         conn.release()
 
