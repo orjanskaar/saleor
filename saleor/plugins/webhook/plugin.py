@@ -404,12 +404,10 @@ class WebhookPlugin(BasePlugin):
             try:
                 event = generate_truncated_api_call_payload(request, response)
                 observability_buffer_put_event(event_type, event)
-            except ValueError as e:
-                logger.warning("Observability error: %s", e)
-            except FullObservabilityEventsBuffer as e:
-                logger.info("Observability error: %s", e)
-            except ObservabilityError as e:
-                logger.error("Observability error: %s", e)
+            except (ValueError, ObservabilityError):
+                logger.info("Observability %s event skiped", event_type, exc_info=True)
+            except Exception:
+                logger.warn("Observability %s event skiped", event_type, exc_info=True)
 
     def observability_event_delivery_attempt(
         self,
@@ -426,12 +424,10 @@ class WebhookPlugin(BasePlugin):
                     attempt, next_retry
                 )
                 observability_buffer_put_event(event_type, event)
-            except ValueError as e:
-                logger.warning("Observability error: %s", e)
-            except FullObservabilityEventsBuffer as e:
-                logger.info("Observability error: %s", e)
-            except ObservabilityError as e:
-                logger.error("Observability error: %s", e)
+            except (ValueError, ObservabilityError):
+                logger.info("Observability %s event skiped", event_type, exc_info=True)
+            except Exception:
+                logger.warn("Observability %s event skiped", event_type, exc_info=True)
 
     def checkout_created(self, checkout: "Checkout", previous_value: Any) -> Any:
         if not self.active:

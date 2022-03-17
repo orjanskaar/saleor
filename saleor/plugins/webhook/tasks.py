@@ -428,17 +428,17 @@ def observability_send_events(event_type: str):
             )
         if response.status == EventDeliveryStatus.SUCCESS:
             logger.debug(
-                "[Observability] Successful delivered %s of type %r to %r.",
+                "Observability successful delivered %s of type %r to %r.",
                 len(events),
                 event_type,
                 webhook.target_url,
             )
         else:
             task_logger.info(
-                "[Webhook ID: %r] Failed request to %r: %r for event: %r.",
+                "Observability [Webhook ID: %r] failed request to %r: %r for event: %r.",
                 webhook.id,
                 webhook.target_url,
-                response.content if response else "",
+                response.content,
                 event_type,
             )
     return len(events)
