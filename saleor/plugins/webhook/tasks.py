@@ -435,7 +435,7 @@ def observability_send_events(event_type: str):
             )
         else:
             task_logger.info(
-                "Observability [Webhook ID: %r] failed request to %r: %r for event: %r.",
+                "Observability webhook ID: %r failed request to %r: %r for event: %r.",
                 webhook.id,
                 webhook.target_url,
                 response.content,

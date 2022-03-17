@@ -109,8 +109,8 @@ class WebhookEventAsyncType:
         PAGE_DELETED: "Page Deleted",
         TRANSLATION_CREATED: "Create translation",
         TRANSLATION_UPDATED: "Update translation",
-        OBSERVABILITY_API_CALLS: "Report batch of API call",
-        OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS: "Report batch of event delivery attempts",
+        OBSERVABILITY_API_CALLS: "Report API call",
+        OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS: "Report event delivery attempts",
     }
 
     CHOICES = [

@@ -36,11 +36,7 @@ from ...webhook.payloads import (
 )
 from ..base_plugin import BasePlugin, ExcludedShippingMethod
 from .const import CACHE_EXCLUDED_SHIPPING_KEY
-from .observability import (
-    FullObservabilityEventsBuffer,
-    ObservabilityError,
-    observability_buffer_put_event,
-)
+from .observability import ObservabilityError, observability_buffer_put_event
 from .shipping import get_excluded_shipping_data, parse_list_shipping_methods_response
 from .tasks import (
     _get_webhooks_for_event,

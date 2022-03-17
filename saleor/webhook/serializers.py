@@ -1,6 +1,6 @@
 from dataclasses import InitVar, dataclass
 from datetime import date, datetime
-from json.encoder import ESCAPE_ASCII, ESCAPE_DCT
+from json.encoder import ESCAPE_ASCII, ESCAPE_DCT  # type: ignore
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union
 
 import graphene

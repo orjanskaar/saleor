@@ -3,9 +3,10 @@ import uuid
 from collections import defaultdict
 from dataclasses import asdict
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 import graphene
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import F, QuerySet, Sum
 from django.utils import timezone
@@ -1059,11 +1060,11 @@ def generate_excluded_shipping_methods_for_checkout_payload(
 
 
 SENSITIVE_ENV_KEYS = (SALEOR_AUTH_HEADER, DEFAULT_AUTH_HEADER)
-SENSITIVE_HEADERS = tuple(x.removeprefix("HTTP_") for x in SENSITIVE_ENV_KEYS)
+SENSITIVE_HEADERS = tuple(x[5:] for x in SENSITIVE_ENV_KEYS if x.startswith("HTTP_"))
 
 
 def hide_sensitive_headers(
-    headers: Dict[str, str], sensitive_headers: tuple[str, ...] = SENSITIVE_HEADERS
+    headers: Dict[str, str], sensitive_headers: Tuple[str, ...] = SENSITIVE_HEADERS
 ) -> Dict[str, str]:
     return {
         key: val if key.upper().replace("-", "_") not in sensitive_headers else "***"
@@ -1072,7 +1073,6 @@ def hide_sensitive_headers(
 
 
 EMPTY_TRUNC_TEXT = asdict(JsonTruncText())
-from django.conf import settings
 
 
 def generate_truncated_api_call_payload(
@@ -1103,9 +1103,7 @@ def generate_truncated_api_call_payload(
     initial_size = len(json.dumps(data))
     remaining_limit = size_limit - initial_size
     if remaining_limit < 0:
-        raise ValueError(
-            f"API call payload is too big: {initial_size}. Can't truncate to {size_limit}"
-        )
+        raise ValueError(f"Payload too big. Can't truncate to {size_limit}")
     elif remaining_limit == 0:
         return data
     try:
@@ -1155,8 +1153,8 @@ def generate_truncated_event_delivery_attempt_payload(
             }
     request_headers, response_headers = {}, {}
     try:
-        request_headers = json.loads(attempt.request_headers)
-        response_headers = json.loads(attempt.response_headers)
+        request_headers = json.loads(attempt.request_headers or "")
+        response_headers = json.loads(attempt.response_headers or "")
     except (JSONDecodeError, TypeError):
         pass
     data = {
@@ -1181,9 +1179,7 @@ def generate_truncated_event_delivery_attempt_payload(
     initial_size = len(json.dumps(data))
     remaining_limit = size_limit - initial_size
     if remaining_limit < 0:
-        raise ValueError(
-            f"EventDeliveryAttempt payload is too big: {initial_size}. Can't truncate to {size_limit}"
-        )
+        raise ValueError(f"Payload too big. Can't truncate to {size_limit}")
     elif remaining_limit == 0:
         return data
     response_body = JsonTruncText.truncate(attempt.response or "", remaining_limit // 2)

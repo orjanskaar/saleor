@@ -1,8 +1,7 @@
 import math
-from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Generator, List, Optional, cast
 from uuid import uuid4
 
 from django.conf import settings
@@ -95,7 +94,7 @@ class ObservabilityBuffer(SimpleQueue):
 
     def get_events(self):
         self.consumer.qos(prefetch_count=self.batch)
-        events: list[dict] = []
+        events: List[dict] = []
         for _ in range(self.batch):
             try:
                 message = self.get()
@@ -158,7 +157,7 @@ def observability_buffer_put_event(event_type: str, event: dict):
             buffer.put_event(event)
 
 
-def observability_buffer_get_events(event_type: str) -> list[dict]:
+def observability_buffer_get_events(event_type: str) -> List[dict]:
     if event_type not in WebhookEventAsyncType.OBSERVABILITY_EVENTS:
         raise ValueError(f"Unsupported event_type value: {event_type}")
     with observability_connection() as conn:
