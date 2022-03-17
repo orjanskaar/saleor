@@ -955,7 +955,7 @@ def test_observability_api_call(
     request = rf.post("/", data={"request": "data"})
     request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
     response = JsonResponse(data={"response": "data"})
-    expected_data = generate_truncated_api_call_payload(request, response, 1024)
+    expected_data = generate_truncated_api_call_payload(request, response)
 
     manager.observability_api_call(request, response)
 
@@ -979,7 +979,7 @@ def test_report_event_delivery_attempt(
     manager = get_plugins_manager()
     next_retry = timezone.now()
     expected_data = generate_truncated_event_delivery_attempt_payload(
-        event_attempt, next_retry, 1024
+        event_attempt, next_retry
     )
 
     manager.observability_event_delivery_attempt(event_attempt, next_retry)

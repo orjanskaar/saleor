@@ -402,9 +402,7 @@ class WebhookPlugin(BasePlugin):
         event_type = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
         if _get_webhooks_for_event(event_type):
             try:
-                event = generate_truncated_api_call_payload(
-                    request, response, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
-                )
+                event = generate_truncated_api_call_payload(request, response)
                 observability_buffer_put_event(event_type, event)
             except ValueError as e:
                 logger.warning("Observability error: %s", e)
@@ -425,7 +423,7 @@ class WebhookPlugin(BasePlugin):
         if _get_webhooks_for_event(event_type):
             try:
                 event = generate_truncated_event_delivery_attempt_payload(
-                    attempt, next_retry, settings.OBSERVABILITY_MAX_PAYLOAD_SIZE
+                    attempt, next_retry
                 )
                 observability_buffer_put_event(event_type, event)
             except ValueError as e:
