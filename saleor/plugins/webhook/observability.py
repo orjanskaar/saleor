@@ -90,7 +90,7 @@ class ObservabilityBuffer(SimpleQueue):
     def put_event(self, event: dict):
         if len(self) >= self.max_length:
             raise FullObservabilityEventsBuffer(self.event_type)
-        self.put(event, retry=False, timeout=CONNECT_TIMEOUT)
+        self.put(event, retry=False, timeout=CONNECT_TIMEOUT, compression="zlib")
 
     def get_events(self):
         self.consumer.qos(prefetch_count=self.batch)
