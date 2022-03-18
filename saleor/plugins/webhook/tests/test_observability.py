@@ -21,6 +21,7 @@ from ..observability import (
     ObservabilityBuffer,
     ObservabilityConnectionError,
     ObservabilityKombuError,
+    _get_buffer,
     observability_connection,
     observability_event_delivery_attempt,
     task_next_retry_date,
@@ -28,12 +29,12 @@ from ..observability import (
 from ..tasks import observability_reporter_task, observability_send_events
 
 EVENT_TYPE = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
+MEMORY_BROKER_URL = "memory://"
 
 
 @pytest.fixture
 def memory_broker():
-    broker_url = "memory://"
-    with Connection(broker_url) as conn:
+    with Connection(MEMORY_BROKER_URL) as conn:
         yield conn
         # Force channel clear
         conn.transport.Channel.queues = {}
@@ -102,6 +103,15 @@ def test_buffer_size_in_batches(memory_broker, events, batch_size, batches):
         assert len(buffer) == 0
         _fill_buffer(buffer, events)
         assert buffer.size_in_batches() == batches
+
+
+def test_buffer_get_events(memory_broker):
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=20) as buffer:
+        _fill_buffer(buffer, 10)
+        events = buffer.get_events()
+
+        assert len(events) == 10
+        assert len(buffer) == 0
 
 
 def test_buffer_appends_message_id(memory_broker):
@@ -237,3 +247,19 @@ def test_observability_reporter_task(
     mocked_celery_group.return_value.apply_async.assert_called_once_with(
         expires=expiration_time
     )
+
+
+def test_get_buffer_verify_event_type():
+    with pytest.raises(ValueError):
+        with _get_buffer("WRONG_EVENT_TYPE"):
+            pass
+
+
+def test_get_buffer_loads_proper_settings(settings):
+    settings.OBSERVABILITY_BROKER_URL = MEMORY_BROKER_URL
+    settings.OBSERVABILITY_BUFFER_BATCH = 3
+    settings.OBSERVABILITY_BUFFER_SIZE_LIMIT = 5
+
+    with _get_buffer(EVENT_TYPE) as buffer:
+        assert buffer.batch == 3
+        assert buffer.max_length == 5
