@@ -1093,6 +1093,7 @@ def generate_truncated_api_call_payload(
         "headers": hide_sensitive_headers(dict(response.headers)),
         "statusCode": response.status_code,
         "reasonPhrase": response.reason_phrase,
+        "contentLength": len(response.content),
         "body": EMPTY_TRUNC_TEXT,
     }
     app_data = None
@@ -1110,18 +1111,19 @@ def generate_truncated_api_call_payload(
         return data
     try:
         if request.POST:
-            req_body = JsonTruncText.truncate(
-                request.POST.urlencode(), remaining_limit // 2
-            )
+            body = request.POST.urlencode()
         else:
-            req_body = JsonTruncText.truncate(
-                request.body.decode("utf-8"), remaining_limit // 2
-            )
+            body = request.body.decode("utf-8")
+        req_body = JsonTruncText.truncate(body, remaining_limit // 2)
     except ValueError:
         req_body = JsonTruncText()
-    res_body = JsonTruncText.truncate(
-        response.content.decode(response.charset), remaining_limit - req_body.byte_size
-    )
+    try:
+        res_body = JsonTruncText.truncate(
+            response.content.decode(response.charset),
+            remaining_limit - req_body.byte_size,
+        )
+    except ValueError:
+        res_body = JsonTruncText()
     req_data["body"] = asdict(req_body)
     res_data["body"] = asdict(res_body)
     return data
@@ -1137,14 +1139,17 @@ def generate_truncated_event_delivery_attempt_payload(
     delivery_data, webhook_data, app_data = {}, {}, {}
     payload = None
     if delivery := attempt.delivery:
+        if delivery.payload:
+            payload = delivery.payload.payload
         delivery_data = {
             "id": graphene.Node.to_global_id("EventDelivery", delivery.pk),
             "status": delivery.status,
             "type": delivery.event_type,
-            "payload": EMPTY_TRUNC_TEXT,
+            "payload": {
+                "contentLength": len(payload or ""),
+                "body": EMPTY_TRUNC_TEXT,
+            },
         }
-        if delivery.payload:
-            payload = delivery.payload.payload
         if webhook := delivery.webhook:
             app_data = {
                 "id": graphene.Node.to_global_id("App", webhook.app.pk),
@@ -1157,10 +1162,11 @@ def generate_truncated_event_delivery_attempt_payload(
             }
     request_headers, response_headers = {}, {}
     try:
-        request_headers = json.loads(attempt.request_headers or "")
-        response_headers = json.loads(attempt.response_headers or "")
+        request_headers = json.loads(attempt.request_headers or "{}")
+        response_headers = json.loads(attempt.response_headers or "{}")
     except (JSONDecodeError, TypeError):
         pass
+    response_body = attempt.response or ""
     data = {
         "eventDeliveryAttempt": {
             "id": graphene.Node.to_global_id("EventDeliveryAttempt", attempt.pk),
@@ -1174,6 +1180,7 @@ def generate_truncated_event_delivery_attempt_payload(
         },
         "response": {
             "headers": response_headers,
+            "contentLength": len(response_body.encode("utf-8")),
             "body": EMPTY_TRUNC_TEXT,
         },
         "eventDelivery": delivery_data,
@@ -1186,10 +1193,12 @@ def generate_truncated_event_delivery_attempt_payload(
         raise ValueError(f"Payload too big. Can't truncate to {size_limit}")
     elif remaining_limit == 0:
         return data
-    response_body = JsonTruncText.truncate(attempt.response or "", remaining_limit // 2)
-    data["response"]["body"] = asdict(response_body)
+    trunc_response_body = JsonTruncText.truncate(response_body, remaining_limit // 2)
+    data["response"]["body"] = asdict(trunc_response_body)
     if payload is not None:
-        delivery_data["payload"] = asdict(
-            JsonTruncText.truncate(payload, remaining_limit - response_body.byte_size)
+        delivery_data["payload"]["body"] = asdict(
+            JsonTruncText.truncate(
+                payload, remaining_limit - trunc_response_body.byte_size
+            )
         )
     return data
