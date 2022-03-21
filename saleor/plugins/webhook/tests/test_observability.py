@@ -11,6 +11,7 @@ from celery.exceptions import Retry
 from django.conf import settings
 from freezegun import freeze_time
 from kombu import Connection
+from kombu.exceptions import ChannelError
 from kombu.exceptions import ConnectionError as KombuConnectionError
 from kombu.exceptions import KombuError
 
@@ -22,6 +23,9 @@ from ..observability import (
     ObservabilityConnectionError,
     ObservabilityKombuError,
     _get_buffer,
+    observability_buffer_get_events,
+    observability_buffer_put_event,
+    observability_buffer_size_in_batches,
     observability_connection,
     observability_event_delivery_attempt,
     task_next_retry_date,
@@ -29,12 +33,17 @@ from ..observability import (
 from ..tasks import observability_reporter_task, observability_send_events
 
 EVENT_TYPE = WebhookEventAsyncType.OBSERVABILITY_API_CALLS
-MEMORY_BROKER_URL = "memory://"
+TESTS_TIMEOUT = 0.1
+
+
+@pytest.fixture(scope="session")
+def memory_broker_url():
+    return "memory://"
 
 
 @pytest.fixture
-def memory_broker():
-    with Connection(MEMORY_BROKER_URL) as conn:
+def memory_broker(memory_broker_url: str):
+    with Connection(memory_broker_url) as conn:
         yield conn
         # Force channel clear
         conn.transport.Channel.queues = {}
@@ -108,17 +117,26 @@ def test_buffer_size_in_batches(memory_broker, events, batch_size, batches):
 def test_buffer_get_events(memory_broker):
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=20) as buffer:
         _fill_buffer(buffer, 10)
-        events = buffer.get_events()
+
+        events = buffer.get_events(timeout=TESTS_TIMEOUT)
 
         assert len(events) == 10
         assert len(buffer) == 0
 
 
+@patch(
+    "saleor.plugins.webhook.observability.SimpleQueue.qsize", side_effect=ChannelError
+)
+def test_buffer_qsize_when_queue_not_exists(_, memory_broker):
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
+        assert len(buffer) == 0
+
+
 def test_buffer_serialization(memory_broker):
     EVENT = {"test": "data"}
-    with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
         buffer.put_event(json.dumps({"test": "data"}))
-        assert buffer.get_events()[0] == EVENT
+        assert buffer.get_events(timeout=TESTS_TIMEOUT)[0] == EVENT
 
 
 def test_buffer_max_length(memory_broker):
@@ -247,11 +265,42 @@ def test_get_buffer_verify_event_type():
             pass
 
 
-def test_get_buffer_loads_proper_settings(settings):
-    settings.OBSERVABILITY_BROKER_URL = MEMORY_BROKER_URL
+def test_get_buffer_loads_proper_settings(memory_broker_url, settings):
+    settings.OBSERVABILITY_BROKER_URL = memory_broker_url
     settings.OBSERVABILITY_BUFFER_BATCH = 3
     settings.OBSERVABILITY_BUFFER_SIZE_LIMIT = 5
 
     with _get_buffer(EVENT_TYPE) as buffer:
         assert buffer.batch == 3
         assert buffer.max_length == 5
+
+
+def test_observability_buffer_put_event(memory_broker_url, memory_broker, settings):
+    settings.OBSERVABILITY_BROKER_URL = memory_broker_url
+    PAYLOAD = {"test": "payload"}
+
+    observability_buffer_put_event(EVENT_TYPE, json.dumps(PAYLOAD))
+
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
+        assert buffer.get_events(timeout=TESTS_TIMEOUT)[0] == PAYLOAD
+
+
+def test_observability_buffer_get_events(memory_broker_url, memory_broker, settings):
+    settings.OBSERVABILITY_BROKER_URL = memory_broker_url
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
+        _fill_buffer(buffer, 10)
+
+    events = observability_buffer_get_events(EVENT_TYPE, timeout=TESTS_TIMEOUT)
+
+    assert len(events) == 10
+
+
+def test_observability_buffer_size_in_batches(
+    memory_broker_url, memory_broker, settings
+):
+    settings.OBSERVABILITY_BROKER_URL = memory_broker_url
+    settings.OBSERVABILITY_BUFFER_BATCH = 10
+    with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
+        _fill_buffer(buffer, 11)
+
+    assert observability_buffer_size_in_batches(EVENT_TYPE) == 2

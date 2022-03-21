@@ -2,9 +2,7 @@ import json
 import uuid
 from collections import defaultdict
 from dataclasses import asdict
-from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
-from uuid import uuid4
 
 import graphene
 from django.conf import settings
@@ -1083,7 +1081,7 @@ def generate_truncated_api_call_payload(
 ) -> str:
     if bytes_limit is None:
         bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
-    req_id = getattr(request, "request_uuid", uuid4())
+    req_id = getattr(request, "request_uuid", uuid.uuid4())
     req_time = getattr(request, "request_time", timezone.now())
     req_data = {
         "id": str(req_id),

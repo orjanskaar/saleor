@@ -1205,3 +1205,16 @@ def test_generate_truncated_event_delivery_attempt_payload_with_next_retry_date(
         )
     )
     assert payload["eventDeliveryAttempt"]["nextRetry"] == next_retry_date.timestamp()
+
+
+def test_generate_truncated_event_delivery_attempt_payload_with_empty_headers(
+    event_attempt,
+):
+    event_attempt.request_headers, event_attempt.response_headers = None, None
+
+    payload = json.loads(
+        generate_truncated_event_delivery_attempt_payload(event_attempt, None)
+    )
+
+    assert payload["request"]["headers"] == {}
+    assert payload["response"]["headers"] == {}

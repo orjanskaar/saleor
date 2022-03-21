@@ -22,7 +22,7 @@ OBSERVABILITY_EXCHANGE_NAME = "observability_exchange"
 CACHE_KEY = "buffer_"
 EXCHANGE = Exchange(OBSERVABILITY_EXCHANGE_NAME, type="direct")
 CONNECT_TIMEOUT = 0.2
-DRAIN_EVENTS_TIMEOUT = 10
+DRAIN_EVENTS_TIMEOUT = 10.0
 
 
 class ObservabilityError(Exception):
@@ -96,12 +96,12 @@ class ObservabilityBuffer(SimpleQueue):
             compression="zlib",
         )
 
-    def get_events(self) -> List[dict]:
+    def get_events(self, timeout=DRAIN_EVENTS_TIMEOUT) -> List[dict]:
         self.consumer.qos(prefetch_count=self.batch)
         events: List[dict] = []
         for _ in range(self.batch):
             try:
-                message = self.get()
+                message = self.get(timeout=timeout)
                 events.append(cast(dict, message.decode()))
             except self.Empty:
                 break
@@ -167,9 +167,11 @@ def observability_buffer_put_event(event_type: str, json_payload: str):
         buffer.put_event(json_payload)
 
 
-def observability_buffer_get_events(event_type: str) -> List[dict]:
+def observability_buffer_get_events(
+    event_type: str, timeout=DRAIN_EVENTS_TIMEOUT
+) -> List[dict]:
     with _get_buffer(event_type) as buffer:
-        return buffer.get_events()
+        return buffer.get_events(timeout=timeout)
 
 
 def observability_buffer_size_in_batches(event_type: str) -> int:
