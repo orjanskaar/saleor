@@ -4,6 +4,8 @@ from draftjs_sanitizer import SafeJSONEncoder
 from measurement.measures import Weight
 from prices import Money
 
+from .json_truncate import JsonTruncText
+
 MONEY_TYPE = "Money"
 
 
@@ -20,6 +22,8 @@ class CustomJsonEncoder(DjangoJSONEncoder):
         # Mirror implementation of django_measurement.MeasurementField.value_to_string
         if isinstance(obj, Weight):
             return "%s:%s" % (obj.value, obj.unit)
+        if isinstance(obj, JsonTruncText):
+            return {"text": obj.text, "truncated": obj.truncated}
         return super().default(obj)
 
 
