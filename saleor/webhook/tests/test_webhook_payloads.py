@@ -5,6 +5,7 @@ from decimal import Decimal
 from itertools import chain
 from unittest import mock
 from unittest.mock import ANY
+from uuid import UUID
 
 import graphene
 import pytest
@@ -1058,6 +1059,7 @@ def test_generate_truncated_api_call_payload(app, rf):
 
     payload = json.loads(generate_truncated_api_call_payload(request, response))
 
+    assert UUID(payload["request"].pop("id"), version=4)
     assert payload == {
         "request": {
             "time": request.request_time.timestamp(),
@@ -1090,9 +1092,10 @@ def test_generate_truncated_api_call_payload_failed(app, rf):
     request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
     request.app = app
     response = JsonResponse({"response": "data"})
+    TOO_SMALL_BYTES_LIMIT = 10
 
     with pytest.raises(ValueError):
-        generate_truncated_api_call_payload(request, response, 10)
+        generate_truncated_api_call_payload(request, response, TOO_SMALL_BYTES_LIMIT)
 
 
 def test_generate_truncated_api_call_payload_from_post_request(app, rf):
@@ -1120,6 +1123,21 @@ def test_generate_truncated_api_call_payload_not_from_app_payload(rf):
     payload = json.loads(generate_truncated_api_call_payload(request, response))
 
     assert payload["app"] is None
+
+
+def test_generate_truncated_api_call_payload_from_non_utf8_request(app, rf):
+    request = rf.post(
+        "/graphql",
+        data="abcd".encode("UTF-16"),
+        content_type="application/octet-stream",
+    )
+    request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.app = app
+    response = JsonResponse({"response": "data"})
+
+    payload = json.loads(generate_truncated_api_call_payload(request, response))
+
+    assert payload["request"]["body"] == {"text": "", "truncated": True}
 
 
 def test_generate_truncated_event_delivery_attempt_payload(event_attempt):
@@ -1167,6 +1185,14 @@ def test_generate_truncated_event_delivery_attempt_payload(event_attempt):
             "name": "Sample app objects",
         },
     }
+
+
+def test_generate_truncated_event_delivery_attempt_payload_failed(event_attempt):
+    TOO_SMALL_BYTES_LIMIT = 10
+    with pytest.raises(ValueError):
+        generate_truncated_event_delivery_attempt_payload(
+            event_attempt, None, TOO_SMALL_BYTES_LIMIT
+        )
 
 
 def test_generate_truncated_event_delivery_attempt_payload_with_next_retry_date(

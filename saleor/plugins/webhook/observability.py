@@ -2,7 +2,6 @@ import math
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Generator, List, Optional, cast
-from uuid import uuid4
 
 from django.conf import settings
 from django.core.cache import cache
@@ -45,7 +44,6 @@ class FullObservabilityEventsBuffer(ObservabilityError):
 
 
 class ObservabilityBuffer(SimpleQueue):
-    MESSAGE_ID_KEY = "id"
     no_ack = True
 
     @staticmethod
@@ -98,19 +96,13 @@ class ObservabilityBuffer(SimpleQueue):
             compression="zlib",
         )
 
-    def get_events(self):
+    def get_events(self) -> List[dict]:
         self.consumer.qos(prefetch_count=self.batch)
         events: List[dict] = []
         for _ in range(self.batch):
             try:
                 message = self.get()
-                payload = cast(dict, message.decode())
-                if self.MESSAGE_ID_KEY not in payload:
-                    if message.delivery_tag:
-                        payload[self.MESSAGE_ID_KEY] = message.delivery_tag
-                    else:
-                        payload[self.MESSAGE_ID_KEY] = str(uuid4())
-                events.append(payload)
+                events.append(cast(dict, message.decode()))
             except self.Empty:
                 break
         return events
@@ -170,9 +162,9 @@ def _get_buffer(event_type: str) -> Generator[ObservabilityBuffer, None, None]:
             yield buffer
 
 
-def observability_buffer_put_event(event_type: str, event: dict):
+def observability_buffer_put_event(event_type: str, json_payload: str):
     with _get_buffer(event_type) as buffer:
-        buffer.put_event(event)
+        buffer.put_event(json_payload)
 
 
 def observability_buffer_get_events(event_type: str) -> List[dict]:

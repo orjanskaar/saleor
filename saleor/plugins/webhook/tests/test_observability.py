@@ -114,19 +114,11 @@ def test_buffer_get_events(memory_broker):
         assert len(buffer) == 0
 
 
-def test_buffer_appends_message_id(memory_broker):
+def test_buffer_serialization(memory_broker):
+    EVENT = {"test": "data"}
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
         buffer.put_event(json.dumps({"test": "data"}))
-        event = buffer.get_events()[0]
-        assert buffer.MESSAGE_ID_KEY in event
-
-
-def test_buffer_does_not_override_message_id(memory_broker):
-    with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
-        EVENT = {buffer.MESSAGE_ID_KEY: "message-id", "test": "data"}
-        buffer.put_event(json.dumps(EVENT))
-        event = buffer.get_events()[0]
-        assert event == EVENT
+        assert buffer.get_events()[0] == EVENT
 
 
 def test_buffer_max_length(memory_broker):

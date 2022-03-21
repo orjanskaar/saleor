@@ -4,6 +4,7 @@ from collections import defaultdict
 from dataclasses import asdict
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
+from uuid import uuid4
 
 import graphene
 from django.conf import settings
@@ -1082,8 +1083,10 @@ def generate_truncated_api_call_payload(
 ) -> str:
     if bytes_limit is None:
         bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
+    req_id = getattr(request, "request_uuid", uuid4())
     req_time = getattr(request, "request_time", timezone.now())
     req_data = {
+        "id": str(req_id),
         "time": req_time.timestamp(),
         "headers": hide_sensitive_headers(dict(request.headers)),
         "contentLength": int(request.headers.get("Content-Length", 0)),
@@ -1107,23 +1110,18 @@ def generate_truncated_api_call_payload(
     remaining_bytes = bytes_limit - len(base_dump)
     if remaining_bytes < 0:
         raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
-    elif remaining_bytes == 0:
-        return base_dump
     try:
         if request.POST:
             body = request.POST.urlencode()
         else:
             body = request.body.decode("utf-8")
-        req_data["body"] = JsonTruncText.truncate(body, remaining_bytes // 2)
+        req_body = JsonTruncText.truncate(body, remaining_bytes // 2)
     except ValueError:
-        req_data["body"] = JsonTruncText(truncated=True)
-    try:
-        res_data["body"] = JsonTruncText.truncate(
-            response.content.decode(response.charset),
-            remaining_bytes - req_data["body"].byte_size,
-        )
-    except ValueError:
-        res_data["body"] = JsonTruncText(truncated=True)
+        req_body = JsonTruncText(truncated=True)
+    req_data["body"] = req_body
+    res_data["body"] = JsonTruncText.truncate(
+        response.content.decode(response.charset), remaining_bytes - req_body.byte_size
+    )
     return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
 
 
@@ -1159,12 +1157,11 @@ def generate_truncated_event_delivery_attempt_payload(
                 "targetUrl": webhook.target_url,
             }
     request_headers, response_headers = {}, {}
-    try:
-        request_headers = json.loads(attempt.request_headers or "{}")
-        response_headers = json.loads(attempt.response_headers or "{}")
-    except (JSONDecodeError, TypeError):
-        pass
     response_body = attempt.response or ""
+    if attempt.request_headers:
+        request_headers = json.loads(attempt.request_headers)
+    if attempt.response_headers:
+        response_headers = json.loads(attempt.response_headers)
     data = {
         "eventDeliveryAttempt": {
             "id": graphene.Node.to_global_id("EventDeliveryAttempt", attempt.pk),
@@ -1189,13 +1186,10 @@ def generate_truncated_event_delivery_attempt_payload(
     remaining_bytes = bytes_limit - len(initial_dump)
     if remaining_bytes < 0:
         raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
-    elif remaining_bytes == 0:
-        return initial_dump
-    data["response"]["body"] = JsonTruncText.truncate(
-        response_body, remaining_bytes // 2
-    )
+    response_body = JsonTruncText.truncate(response_body, remaining_bytes // 2)
+    data["response"]["body"] = response_body
     if payload is not None:
         delivery_data["payload"]["body"] = JsonTruncText.truncate(
-            payload, remaining_bytes - data["response"]["body"].byte_size
+            payload, remaining_bytes - response_body.byte_size
         )
     return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)

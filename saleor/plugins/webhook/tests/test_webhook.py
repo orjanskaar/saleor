@@ -4,6 +4,7 @@ from decimal import Decimal
 from unittest import mock
 from unittest.mock import ANY, MagicMock
 from urllib.parse import urlencode
+from uuid import uuid4
 
 import boto3
 import graphene
@@ -954,6 +955,7 @@ def test_observability_api_call(
     manager = get_plugins_manager()
     request = rf.post("/", data={"request": "data"})
     request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
+    request.request_uuid = uuid4()
     response = JsonResponse(data={"response": "data"})
     expected_data = generate_truncated_api_call_payload(request, response)
 

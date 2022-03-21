@@ -6,6 +6,7 @@ import logging
 import traceback
 from inspect import isclass
 from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import uuid4
 
 import opentracing
 import opentracing.tags
@@ -488,4 +489,5 @@ def set_query_cost_on_result(execution_result: ExecutionResult, query_cost):
 def observability_api_call(request, response: JsonResponse):
     if settings.OBSERVABILITY_ACTIVE:
         if settings.OBSERVABILITY_REPORT_ALL_API_CALLS or getattr(request, "app", None):
+            request.request_uuid = uuid4()
             request.plugins.observability_api_call(request, response)
