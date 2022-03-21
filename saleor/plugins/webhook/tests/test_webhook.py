@@ -940,18 +940,15 @@ def test_event_delivery_retry(mocked_webhook_send, event_delivery, settings):
     mocked_webhook_send.assert_called_once_with(event_delivery.pk)
 
 
-@mock.patch("saleor.plugins.webhook.plugin._get_webhooks_for_event")
-@mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-def test_observability_api_call(
-    mocked_observability,
-    mocked_get_webhooks_for_event,
-    rf,
-    any_webhook,
-    settings,
-):
-    mocked_get_webhooks_for_event.return_value = [any_webhook]
+@pytest.fixture
+def setup_webhooks_plugin(settings, app, any_webhook, permission_manage_apps):
+    app.permissions.add(permission_manage_apps)
     settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
     settings.OBSERVABILITY_ACTIVE = True
+
+
+@mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
+def test_observability_api_call(mocked_observability, setup_webhooks_plugin, rf):
     manager = get_plugins_manager()
     request = rf.post("/", data={"request": "data"})
     request.request_time = datetime(1914, 6, 28, 10, 50, tzinfo=timezone.utc)
@@ -966,18 +963,43 @@ def test_observability_api_call(
     )
 
 
-@mock.patch("saleor.plugins.webhook.plugin._get_webhooks_for_event")
 @mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
-def test_report_event_delivery_attempt(
-    mocked_observability,
-    mocked_get_webhooks_for_event,
-    any_webhook,
-    event_attempt,
-    settings,
+@mock.patch(
+    "saleor.plugins.webhook.plugin.generate_truncated_api_call_payload",
+    side_effect=ValueError,
+)
+def test_observability_api_call_when_payload_generate_fails(
+    _, mocked_observability_buffer_put_event, setup_webhooks_plugin, rf
 ):
-    mocked_get_webhooks_for_event.return_value = [any_webhook]
-    settings.PLUGINS = ["saleor.plugins.webhook.plugin.WebhookPlugin"]
-    settings.OBSERVABILITY_ACTIVE = True
+    manager = get_plugins_manager()
+
+    manager.observability_api_call(
+        rf.post("/", data={"request": "data"}), JsonResponse(data={"response": "data"})
+    )
+
+    mocked_observability_buffer_put_event.assert_not_called()
+
+
+@mock.patch(
+    "saleor.plugins.webhook.plugin.observability_buffer_put_event",
+    side_effect=Exception,
+)
+def test_observability_api_call_catch_all_exceptions(
+    mocked_observability_buffer_put_event, setup_webhooks_plugin, rf
+):
+    manager = get_plugins_manager()
+
+    manager.observability_api_call(
+        rf.post("/", data={"request": "data"}), JsonResponse(data={"response": "data"})
+    )
+
+
+@mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
+def test_observability_event_delivery_attempt(
+    mocked_observability,
+    setup_webhooks_plugin,
+    event_attempt,
+):
     manager = get_plugins_manager()
     next_retry = timezone.now()
     expected_data = generate_truncated_event_delivery_attempt_payload(
@@ -989,6 +1011,36 @@ def test_report_event_delivery_attempt(
     mocked_observability.assert_called_once_with(
         WebhookEventAsyncType.OBSERVABILITY_EVENT_DELIVERY_ATTEMPTS, expected_data
     )
+
+
+@mock.patch("saleor.plugins.webhook.plugin.observability_buffer_put_event")
+@mock.patch(
+    "saleor.plugins.webhook.plugin.generate_truncated_event_delivery_attempt_payload",
+    side_effect=ValueError,
+)
+def test_observability_event_delivery_attempt_when_payload_generate_fails(
+    _,
+    mocked_observability_buffer_put_event,
+    setup_webhooks_plugin,
+    event_attempt,
+):
+    manager = get_plugins_manager()
+
+    manager.observability_event_delivery_attempt(event_attempt, None)
+
+    mocked_observability_buffer_put_event.assert_not_called()
+
+
+@mock.patch(
+    "saleor.plugins.webhook.plugin.observability_buffer_put_event",
+    side_effect=Exception,
+)
+def test_observability_event_delivery_attempt_catch_all_exceptions(
+    mocked_observability_buffer_put_event, setup_webhooks_plugin, event_attempt
+):
+    manager = get_plugins_manager()
+
+    manager.observability_event_delivery_attempt(event_attempt, None)
 
 
 @mock.patch("saleor.plugins.webhook.tasks.observability_event_delivery_attempt")
