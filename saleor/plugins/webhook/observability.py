@@ -87,10 +87,16 @@ class ObservabilityBuffer(SimpleQueue):
     def size_in_batches(self) -> int:
         return math.ceil(self.qsize() / self.batch)
 
-    def put_event(self, event: dict):
+    def put_event(self, json_payload: str):
         if len(self) >= self.max_length:
             raise FullObservabilityEventsBuffer(self.event_type)
-        self.put(event, retry=False, timeout=CONNECT_TIMEOUT, compression="zlib")
+        self.put(
+            json_payload,
+            retry=False,
+            timeout=CONNECT_TIMEOUT,
+            content_type="application/json",
+            compression="zlib",
+        )
 
     def get_events(self):
         self.consumer.qos(prefetch_count=self.batch)

@@ -24,6 +24,7 @@ from ..core.utils.anonymization import (
     generate_fake_user,
 )
 from ..core.utils.json_serializer import CustomJsonEncoder
+from ..core.utils.json_truncate import JsonTruncText
 from ..discount.utils import fetch_active_discounts
 from ..order import FulfillmentStatus, OrderStatus
 from ..order.models import Fulfillment, FulfillmentLine, Order, OrderLine
@@ -39,7 +40,6 @@ from . import traced_payload_generator
 from .event_types import WebhookEventAsyncType
 from .payload_serializers import PayloadSerializer
 from .serializers import (
-    JsonTruncText,
     serialize_checkout_lines,
     serialize_product_or_variant_attributes,
 )
@@ -1072,16 +1072,16 @@ def hide_sensitive_headers(
     }
 
 
-EMPTY_TRUNC_TEXT = asdict(JsonTruncText())
+EMPTY_TRUNC_TEXT = JsonTruncText(truncated=False)
 
 
 def generate_truncated_api_call_payload(
     request: "HttpRequest",
     response: "JsonResponse",
-    size_limit: Optional[int] = None,
-) -> dict:
-    if size_limit is None:
-        size_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
+    bytes_limit: Optional[int] = None,
+) -> str:
+    if bytes_limit is None:
+        bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
     req_time = getattr(request, "request_time", timezone.now())
     req_data = {
         "time": req_time.timestamp(),
@@ -1103,39 +1103,37 @@ def generate_truncated_api_call_payload(
             "name": app.name,
         }
     data = {"request": req_data, "response": res_data, "app": app_data}
-    initial_size = len(json.dumps(data))
-    remaining_limit = size_limit - initial_size
-    if remaining_limit < 0:
-        raise ValueError(f"Payload too big. Can't truncate to {size_limit}")
-    elif remaining_limit == 0:
-        return data
+    base_dump = json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
+    remaining_bytes = bytes_limit - len(base_dump)
+    if remaining_bytes < 0:
+        raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
+    elif remaining_bytes == 0:
+        return base_dump
     try:
         if request.POST:
             body = request.POST.urlencode()
         else:
             body = request.body.decode("utf-8")
-        req_body = JsonTruncText.truncate(body, remaining_limit // 2)
+        req_data["body"] = JsonTruncText.truncate(body, remaining_bytes // 2)
     except ValueError:
-        req_body = JsonTruncText()
+        req_data["body"] = JsonTruncText(truncated=True)
     try:
-        res_body = JsonTruncText.truncate(
+        res_data["body"] = JsonTruncText.truncate(
             response.content.decode(response.charset),
-            remaining_limit - req_body.byte_size,
+            remaining_bytes - req_data["body"].byte_size,
         )
     except ValueError:
-        res_body = JsonTruncText()
-    req_data["body"] = asdict(req_body)
-    res_data["body"] = asdict(res_body)
-    return data
+        res_data["body"] = JsonTruncText(truncated=True)
+    return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
 
 
 def generate_truncated_event_delivery_attempt_payload(
     attempt: "EventDeliveryAttempt",
     next_retry: Optional["datetime"],
-    size_limit: Optional[int] = None,
-) -> dict:
-    if size_limit is None:
-        size_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
+    bytes_limit: Optional[int] = None,
+) -> str:
+    if bytes_limit is None:
+        bytes_limit = int(settings.OBSERVABILITY_MAX_PAYLOAD_SIZE)
     delivery_data, webhook_data, app_data = {}, {}, {}
     payload = None
     if delivery := attempt.delivery:
@@ -1187,18 +1185,17 @@ def generate_truncated_event_delivery_attempt_payload(
         "webhook": webhook_data,
         "app": app_data,
     }
-    initial_size = len(json.dumps(data))
-    remaining_limit = size_limit - initial_size
-    if remaining_limit < 0:
-        raise ValueError(f"Payload too big. Can't truncate to {size_limit}")
-    elif remaining_limit == 0:
-        return data
-    trunc_response_body = JsonTruncText.truncate(response_body, remaining_limit // 2)
-    data["response"]["body"] = asdict(trunc_response_body)
+    initial_dump = json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)
+    remaining_bytes = bytes_limit - len(initial_dump)
+    if remaining_bytes < 0:
+        raise ValueError(f"Payload too big. Can't truncate to {bytes_limit}")
+    elif remaining_bytes == 0:
+        return initial_dump
+    data["response"]["body"] = JsonTruncText.truncate(
+        response_body, remaining_bytes // 2
+    )
     if payload is not None:
-        delivery_data["payload"]["body"] = asdict(
-            JsonTruncText.truncate(
-                payload, remaining_limit - trunc_response_body.byte_size
-            )
+        delivery_data["payload"]["body"] = JsonTruncText.truncate(
+            payload, remaining_bytes - data["response"]["body"].byte_size
         )
-    return data
+    return json.dumps(data, ensure_ascii=True, cls=CustomJsonEncoder)

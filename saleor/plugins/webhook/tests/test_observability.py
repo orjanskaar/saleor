@@ -47,9 +47,9 @@ def _make_key(x, prefix="key_prefix"):
 def _fill_buffer(
     buffer: ObservabilityBuffer,
     events_count: int,
-    data: Optional[dict] = None,
+    data: Optional[str] = None,
 ):
-    data = data if data else {"test": "data"}
+    data = data or json.dumps({"test": "data"})
     for _ in range(events_count):
         buffer.put_event(data)
 
@@ -64,7 +64,7 @@ def test_clear_buffer(memory_broker):
 
 def test_buffer_if_durable(memory_broker):
     with ObservabilityBuffer(memory_broker, EVENT_TYPE) as buffer:
-        buffer.put_event({"test": "data"})
+        buffer.put_event(json.dumps({"test": "data"}))
         assert len(buffer) == 1
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
         assert len(buffer) == 1
@@ -116,7 +116,7 @@ def test_buffer_get_events(memory_broker):
 
 def test_buffer_appends_message_id(memory_broker):
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
-        buffer.put_event({"test": "data"})
+        buffer.put_event(json.dumps({"test": "data"}))
         event = buffer.get_events()[0]
         assert buffer.MESSAGE_ID_KEY in event
 
@@ -124,7 +124,7 @@ def test_buffer_appends_message_id(memory_broker):
 def test_buffer_does_not_override_message_id(memory_broker):
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, batch=1) as buffer:
         EVENT = {buffer.MESSAGE_ID_KEY: "message-id", "test": "data"}
-        buffer.put_event(EVENT)
+        buffer.put_event(json.dumps(EVENT))
         event = buffer.get_events()[0]
         assert event == EVENT
 
@@ -133,7 +133,7 @@ def test_buffer_max_length(memory_broker):
     with ObservabilityBuffer(memory_broker, EVENT_TYPE, max_length=10) as buffer:
         _fill_buffer(buffer, 10)
         with pytest.raises(FullObservabilityEventsBuffer):
-            buffer.put_event({"skiped": "event"})
+            buffer.put_event(json.dumps({"skiped": "event"}))
         assert len(buffer) == 10
 
 
@@ -153,7 +153,7 @@ def test_observability_connection_catch_all_exceptions(
     with pytest.raises(observability_error):
         with observability_connection(memory_broker) as conn:
             with ObservabilityBuffer(conn, EVENT_TYPE) as buffer:
-                buffer.put_event({"test": "data"})
+                buffer.put_event(json.dumps({"test": "data"}))
 
 
 @pytest.mark.parametrize(
