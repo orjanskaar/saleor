@@ -1154,11 +1154,11 @@ def generate_truncated_event_delivery_attempt_payload(
                 "name": webhook.name,
                 "targetUrl": webhook.target_url,
             }
-    request_headers, response_headers = {}, {}
     response_body = attempt.response or ""
-    if attempt.request_headers:
+    request_headers, response_headers = {}, {}
+    if isinstance(attempt.request_headers, str):
         request_headers = json.loads(attempt.request_headers)
-    if attempt.response_headers:
+    if isinstance(attempt.response_headers, str):
         response_headers = json.loads(attempt.response_headers)
     data = {
         "eventDeliveryAttempt": {
