@@ -123,7 +123,7 @@ class CollectionSortingInput(ChannelSortInputObjectType):
 
 class ProductOrderField(graphene.Enum):
     NAME = ["name", "slug"]
-    RANK = ["search_rank"]
+    RANK = ["search_rank", "slug"]
     PRICE = ["min_variants_price_amount", "name", "slug"]
     MINIMAL_PRICE = ["discounted_price_amount", "name", "slug"]
     LAST_MODIFIED = ["updated_at", "name", "slug"]
