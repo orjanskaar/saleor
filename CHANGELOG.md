@@ -6,7 +6,7 @@ All notable, unreleased changes to this project will be documented in this file.
 # Unreleased
 
 ### Breaking changes
-- Convert IDs from DB to Graphql format in Email Payload - #9388 by @L3str4nge
+- Convert IDs from DB to Graphql format in all notification payloads (email plugins and webhook.NOTIFY)- #9388 by @L3str4nge
 
 ### Other changes
 
