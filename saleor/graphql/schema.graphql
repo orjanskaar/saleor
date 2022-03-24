@@ -3256,6 +3256,7 @@ enum AttributeChoicesSortField {
 
 input AttributeValueFilterInput {
   search: String
+  ids: [ID]
 }
 
 type AttributeTranslation implements Node {
